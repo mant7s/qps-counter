@@ -1,0 +1,8 @@
+# System
+.DS_Store
+.vscode
+.idea
+
+# Build
+bin
+config/config.yaml

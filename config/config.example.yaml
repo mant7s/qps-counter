@@ -1,0 +1,18 @@
+server:
+  port: 8080
+  read_timeout: 5s
+  write_timeout: 10s
+
+counter:
+  type: "lockfree"
+  window_size: 1s  # 统计窗口时长（秒）
+  slot_num: 10     # 窗口分片数量
+  precision: 100ms # 时间精度（毫秒）
+
+logger:
+  level: info
+  format: json
+  file_path: "/var/log/qps-counter/app.log"
+  max_size: 100
+  max_backups: 3
+  max_age: 7
