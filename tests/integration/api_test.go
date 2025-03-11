@@ -11,6 +11,8 @@ import (
 	"github.com/mant7s/qps-counter/internal/api"
 	"github.com/mant7s/qps-counter/internal/config"
 	"github.com/mant7s/qps-counter/internal/counter"
+	"github.com/mant7s/qps-counter/internal/limiter"
+	"github.com/mant7s/qps-counter/internal/metrics"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,12 +33,18 @@ func TestAPIEndpoints(t *testing.T) {
 
 	qpsCounter := counter.NewCounter(&cfg.Counter)
 	defer qpsCounter.Stop()
-	
-	// 创建优雅关闭管理器用于测试
-	gracefulShutdown := counter.NewGracefulShutdown(5 * time.Second)
-	
+
+	// 创建增强的优雅关闭管理器用于测试
+	gracefulShutdown := counter.NewEnhancedGracefulShutdown(5*time.Second, 10*time.Second)
+
+	// 创建限流器用于测试
+	rateLimiter := limiter.NewRateLimiter(10000, 20000, true)
+
+	// 创建指标收集器
+	metricsCollector := metrics.NewMetrics(qpsCounter)
+
 	// 使用api.NewRouter创建测试路由，与实际应用保持一致
-	router := api.NewRouter(qpsCounter, gracefulShutdown)
+	router := api.NewRouter(qpsCounter, gracefulShutdown, rateLimiter, metricsCollector, "/metrics", true)
 
 	// 设置测试模式
 	gin.SetMode(gin.TestMode)

@@ -4,10 +4,25 @@ server:
   write_timeout: 10s
 
 counter:
-  type: "lockfree"
-  window_size: 1s  # 统计窗口时长（秒）
-  slot_num: 10     # 窗口分片数量
-  precision: 100ms # 时间精度（毫秒）
+  type: "lockfree"     # 计数器类型（lockfree/sharded）
+  window_size: 1s      # 统计时间窗口
+  slot_num: 10         # 窗口分片数量
+  precision: 100ms     # 统计精度
+
+limiter:
+  enabled: true        # 是否启用限流
+  rate: 1000000        # 每秒允许的请求数
+  burst: 10000         # 突发请求容量
+  adaptive: true       # 是否启用自适应限流
+
+metrics:
+  enabled: true        # 是否启用指标收集
+  interval: 5s         # 指标收集间隔
+  endpoint: "/metrics" # 指标暴露端点
+
+shutdown:
+  timeout: 30s         # 优雅关闭超时时间
+  max_wait: 60s        # 最大等待时间
 
 logger:
   level: info

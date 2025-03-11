@@ -8,8 +8,20 @@ import (
 	"github.com/mant7s/qps-counter/internal/api"
 	"github.com/mant7s/qps-counter/internal/config"
 	"github.com/mant7s/qps-counter/internal/counter"
+	"github.com/mant7s/qps-counter/internal/limiter"
+	"github.com/mant7s/qps-counter/internal/logger"
+	"github.com/mant7s/qps-counter/internal/metrics"
 	vegeta "github.com/tsenart/vegeta/v12/lib"
 )
+
+func init() {
+	// 初始化日志，避免测试中的日志错误
+	loggerConfig := config.LoggerConfig{
+		Level:  "debug",
+		Format: "console",
+	}
+	logger.Init(loggerConfig)
+}
 
 func TestPressure(t *testing.T) {
 	// 如果是短时间运行的测试，可以跳过
@@ -28,11 +40,17 @@ func TestPressure(t *testing.T) {
 	qpsCounter := counter.NewLockFree(cfg)
 	defer qpsCounter.Stop()
 
-	// 创建优雅关闭管理器
-	gracefulShutdown := counter.NewGracefulShutdown(5 * time.Second)
+	// 创建增强的优雅关闭管理器
+	gracefulShutdown := counter.NewEnhancedGracefulShutdown(5*time.Second, 10*time.Second)
+
+	// 创建限流器，设置较高的限流阈值以避免测试中的限流影响
+	rateLimiter := limiter.NewRateLimiter(20000, 5000, false)
+
+	// 创建指标收集器
+	metricsCollector := metrics.NewMetrics(qpsCounter)
 
 	// 创建路由
-	router := api.NewRouter(qpsCounter, gracefulShutdown)
+	router := api.NewRouter(qpsCounter, gracefulShutdown, rateLimiter, metricsCollector, "/metrics", true)
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 

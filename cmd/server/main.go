@@ -10,12 +10,13 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
-	"time"
 
 	"github.com/mant7s/qps-counter/internal/api"
 	"github.com/mant7s/qps-counter/internal/config"
 	"github.com/mant7s/qps-counter/internal/counter"
+	"github.com/mant7s/qps-counter/internal/limiter"
 	"github.com/mant7s/qps-counter/internal/logger"
+	"github.com/mant7s/qps-counter/internal/metrics"
 	"go.uber.org/zap"
 )
 
@@ -33,8 +34,8 @@ func main() {
 		}
 	}()
 
-	// 创建优雅关闭管理器，设置超时时间为5秒
-	gracefulShutdown := counter.NewGracefulShutdown(5 * time.Second)
+	// 创建增强的优雅关闭管理器，使用配置的超时时间
+	gracefulShutdown := counter.NewEnhancedGracefulShutdown(cfg.Shutdown.Timeout, cfg.Shutdown.MaxWait)
 
 	qpsCounter := counter.NewCounter(&cfg.Counter)
 	defer qpsCounter.Stop()
@@ -45,7 +46,20 @@ func main() {
 	adaptiveManager := counter.NewAdaptiveShardingManager(qpsCounter, &cfg.Counter, minShards, maxShards)
 	defer adaptiveManager.Stop()
 
-	router := api.NewRouter(qpsCounter, gracefulShutdown)
+	// 创建限流器，使用配置的参数
+	rateLimiter := limiter.NewRateLimiter(cfg.Limiter.Rate, cfg.Limiter.Burst, cfg.Limiter.Adaptive)
+	// 根据配置决定是否启用限流器
+	rateLimiter.SetEnabled(cfg.Limiter.Enabled)
+
+	// 初始化指标收集器
+	metricsCollector := metrics.NewMetrics(qpsCounter)
+	// 根据配置决定是否启用指标收集
+	if cfg.Metrics.Enabled {
+		metricsCollector.Start(cfg.Metrics.Interval)
+		defer metricsCollector.Stop()
+	}
+
+	router := api.NewRouter(qpsCounter, gracefulShutdown, rateLimiter, metricsCollector, cfg.Metrics.Endpoint, cfg.Metrics.Enabled)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
@@ -60,11 +74,13 @@ func main() {
 		}
 	}()
 
+	logger.Info("服务已启动", zap.Int("port", cfg.Server.Port), zap.String("metrics", "/metrics"))
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Shutdown.Timeout)
 	defer cancel()
 
 	// 启动优雅关闭流程

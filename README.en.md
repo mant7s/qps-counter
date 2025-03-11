@@ -13,10 +13,12 @@ High-precision QPS (Queries Per Second) statistics system, suitable for real-tim
 - 🔄 Intelligent sharding strategy (dynamic sharding based on CPU cores, 10-second interval QPS monitoring)
 - ⚡ Time window sliding algorithm (1s window, 100ms precision)
 - 🧠 Adaptive load balancing (automatically adjusts when QPS change rate exceeds 30%)
-- 🛡️ Graceful shutdown mechanism (request integrity guarantee)
+- 🛡️ Enhanced graceful shutdown mechanism (request integrity guarantee, timeout control, forced shutdown)
+- 🔒 Token bucket rate limiting (dynamically adjustable rate, burst traffic support, adaptive rate limiting)
+- 📊 Prometheus monitoring integration (QPS, memory, CPU, request latency metrics)
 - ✅ Health check endpoint support (/healthz)
-- 📈 Resource usage monitoring metrics
-- ⚙️ High-performance design (atomic operations, fine-grained locks)
+- 📈 Resource usage monitoring metrics (memory threshold adaptation, automatic shard adjustment)
+- ⚙️ High-performance design (atomic operations, fine-grained locks, request counting and statistics)
 
 ## 🏗 Architecture Design
 ```
@@ -35,7 +37,15 @@ High-precision QPS (Queries Per Second) statistics system, suitable for real-tim
 |    (±30% triggers adjustment)                  |
 |  • Auto-scaling shards (min: CPU cores,        |
 |    max: CPU cores*8)                           |
+|  • Memory usage monitoring (auto-adjusts shards |
+|    to optimize memory usage)                   |
 +------------------------------------------------+
+                                ⇓
++------------------+  +------------------+  +------------------+
+|  Rate Limiting   |  |    Monitoring    |  | Graceful Shutdown|
+| (Token Bucket+  |  | (Prometheus      |  | (Request Integrity|
+|  Adaptive)      |  |  Integration)    |  |  Guarantee)      |
++------------------+  +------------------+  +------------------+
 ```
 
 ## 🔍 Technical Implementation
@@ -56,6 +66,26 @@ High-performance counter with sharding design, suitable for ultra-high concurren
 - Real-time monitoring of QPS change rate, triggering shard adjustment when changes exceed ±30%
 - Increases shard count by 50% during growth, reduces by 30% during decline
 - Shard count range controlled between CPU cores and CPU cores*8, avoiding resource waste
+- Memory usage monitoring, automatically adjusts shards when approaching threshold
+- Intelligent adjustment based on combined QPS change rate (60%) and memory usage (40%)
+
+### Token Bucket Rate Limiter
+- Efficient rate limiting based on token bucket algorithm, supporting burst traffic
+- Dynamic rate adjustment to adapt to system load changes
+- Adaptive rate limiting mode that automatically adjusts parameters based on system resource usage
+- Precise tracking of rejected requests with monitoring metrics
+
+### Monitoring Metrics System
+- Prometheus integration providing rich system operational metrics
+- Real-time monitoring of QPS, memory usage, CPU utilization, and Goroutine count
+- Request latency distribution statistics supporting P99 performance analysis
+- Configurable metrics collection interval optimizing performance and precision balance
+
+### Enhanced Graceful Shutdown
+- Request integrity guarantee ensuring in-progress requests complete processing
+- Multi-level timeout control with soft and hard timeout mechanisms
+- Real-time status reporting providing shutdown process observability
+- Forced shutdown protection preventing system from hanging indefinitely
 
 ## ⚙️ Configuration
 ```yaml
@@ -69,6 +99,21 @@ counter:
   window_size: 1s      # Statistical time window
   slot_num: 10         # Window shard count
   precision: 100ms     # Statistical precision
+
+limiter:
+  enabled: true        # Enable rate limiting
+  rate: 1000000        # Requests allowed per second
+  burst: 10000         # Burst capacity
+  adaptive: true       # Enable adaptive rate limiting
+
+metrics:
+  enabled: true        # Enable metrics collection
+  interval: 5s         # Metrics collection interval
+  endpoint: "/metrics" # Metrics exposure endpoint
+
+shutdown:
+  timeout: 30s         # Graceful shutdown timeout
+  max_wait: 60s        # Maximum wait time
 
 logger:
   level: info
@@ -164,7 +209,9 @@ Response:
 │   ├── api/      # API handlers
 │   ├── config/   # Configuration management
 │   ├── counter/  # Counter implementation
-│   └── logger/   # Logging component
+│   ├── limiter/  # Rate limiting component
+│   ├── logger/   # Logging component
+│   └── metrics/  # Monitoring metrics component
 ├── deployments/  # Deployment configurations
 └── tests/        # Test code
 ```
