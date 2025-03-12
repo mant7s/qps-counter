@@ -30,6 +30,7 @@ type ServerConfig struct {
 	Port         int           `mapstructure:"port" env:"PORT"`
 	ReadTimeout  time.Duration `mapstructure:"read_timeout" env:"READ_TIMEOUT"`
 	WriteTimeout time.Duration `mapstructure:"write_timeout" env:"WRITE_TIMEOUT"`
+	ServerType   string        `mapstructure:"server_type" env:"SERVER_TYPE"` // 服务器类型："fasthttp" 或 "gin"
 }
 
 // CounterConfig 计数器配置
@@ -98,6 +99,7 @@ func Load(configPath string) (*AppConfig, error) {
 	v.BindEnv("server.port", "QPS_SERVER_PORT")
 	v.BindEnv("server.read_timeout", "QPS_SERVER_READ_TIMEOUT")
 	v.BindEnv("server.write_timeout", "QPS_SERVER_WRITE_TIMEOUT")
+	v.BindEnv("server.server_type", "QPS_SERVER_SERVER_TYPE")
 
 	// 计数器配置
 	v.BindEnv("counter.type", "QPS_COUNTER_TYPE")
