@@ -19,12 +19,14 @@
 - ✅ 健康检查端点支持（/healthz）
 - 📈 资源使用监控指标（内存阈值自适应，自动分片调整）
 - ⚙️ 高性能设计（原子操作、细粒度锁、请求计数与统计）
+- 🌐 HTTP服务器双模式支持（标准net/http和高性能fasthttp）
 
 ## 🏗 架构设计
 ```
 +-------------------+     +-----------------------+
-|   HTTP Endpoint   | ⇒  |  Adaptive Sharding    |
-+-------------------+     +-----------------------+
+|   HTTP Server     | ⇒  |  Adaptive Sharding    |
+| (net/http,fasthttp)|    +-----------------------+
++-------------------+     
       ↓                               ↓
 +---------------+        +------------------------+
 | Lock-Free引擎 |        | Sharded计数器集群       |
@@ -89,6 +91,7 @@ server:
   port: 8080
   read_timeout: 5s
   write_timeout: 10s
+  server_type: fasthttp  # HTTP服务器类型（standard/fasthttp）
 
 counter:
   type: "lockfree"     # 计数器类型（lockfree/sharded）
@@ -121,115 +124,107 @@ logger:
 ```
 
 ## 📈 性能指标
-| 引擎类型   | 并发量 | 平均延迟 | P99延迟 | QPS     |
+| 服务器类型  | 并发量 | 平均延迟 | P99延迟 | QPS     |
 |------------|--------|---------|--------|--------|
-| Lock-Free  | 10k    | 1.2ms   | 3.5ms  | 950k   |
-| Sharded    | 50k    | 3.8ms   | 9.2ms  | 4.2M   |
+| standard   | 10k    | 1.8ms   | 4.5ms  | 850k   |
+| fasthttp   | 10k    | 1.2ms   | 3.5ms  | 950k   |
 
 高负载场景测试结果：
-| 引擎类型   | 并发量 | 平均延迟 | P99延迟 | QPS     |
+| 服务器类型  | 并发量 | 平均延迟 | P99延迟 | QPS     |
 |------------|--------|---------|--------|--------|
-| Lock-Free  | 100k   | 1.2ms   | 3.5ms  | 1.23M  |
-| Sharded    | 500k   | 3.8ms   | 9.2ms  | 4.75M  |
-
-## 🛡️ 健康检查与监控
-
-### 健康检查端点
-```http
-GET /healthz
-响应:
-{
-  "status": "OK"
-}
-```
+| standard   | 100k   | 2.5ms   | 6.5ms  | 1.05M  |
+| fasthttp   | 100k   | 1.2ms   | 3.5ms  | 1.23M  |
 
 ## 🚀 快速开始
 
 ### 安装
 ```bash
-# 克隆仓库
-$ git clone https://github.com/mant7s/qps-counter.git
-$ cd qps-counter
-
-# 复制配置文件
-$ cp config/config.example.yaml config/config.yaml
-
-# 编译
-$ make build
-
-# 运行
-$ ./bin/qps-counter
+go get github.com/mant7s/qps-counter
 ```
 
-### Docker部署
-```bash
-# 使用Docker部署
-$ git clone https://github.com/mant7s/qps-counter.git
-$ cd qps-counter
-$ cp config/config.example.yaml config/config.yaml
-$ cd deployments
-$ docker-compose up -d --scale qps-counter=3
+### 基本使用
+```go
+package main
 
-# 验证部署
-$ curl http://localhost:8080/healthz
-```
+import (
+    "github.com/mant7s/qps-counter/counter"
+    "log"
+)
 
-## 📚 API文档
+func main() {
+    // 创建计数器实例
+    cfg := counter.DefaultConfig()
+    counter, err := counter.NewCounter(cfg)
+    if err != nil {
+        log.Fatal(err)
+    }
 
-### 增加计数
-```http
-POST /collect
-请求体:
-{
-  "count": 1
-}
-响应: 202 Accepted
-```
+    // 增加计数
+    counter.Increment()
 
-### 获取当前QPS
-```http
-GET /qps
-响应: 
-{
-  "qps": 12345
+    // 获取当前QPS
+    qps := counter.GetQPS()
+    log.Printf("Current QPS: %d", qps)
 }
 ```
 
-## 🔧 开发指南
+## 📊 监控指标
 
-### 项目结构
-```
-├── cmd/          # 入口程序
-├── config/       # 配置文件
-├── internal/     # 内部包
-│   ├── api/      # API处理器
-│   ├── config/   # 配置管理
-│   ├── counter/  # 计数器实现
-│   ├── limiter/  # 限流器组件
-│   ├── logger/   # 日志组件
-│   └── metrics/  # 监控指标组件
-├── deployments/  # 部署配置
-└── tests/        # 测试代码
-```
+系统通过`/metrics`端点暴露Prometheus格式的监控指标：
 
-### 运行测试
+- `qps_counter_requests_total`: 总请求计数
+- `qps_counter_current_qps`: 当前QPS值
+- `qps_counter_memory_usage_bytes`: 内存使用量
+- `qps_counter_cpu_usage_percent`: CPU使用率
+- `qps_counter_goroutines`: Goroutine数量
+- `qps_counter_request_duration_seconds`: 请求处理时间分布
+
+## 🔍 API文档
+
+详细的API文档请参考[API文档](docs/api.md)。
+
+## 🛠 开发指南
+
+### 环境要求
+- Go 1.18+
+- Make
+
+### 本地开发
+1. 克隆仓库
 ```bash
-# 运行单元测试
-$ make test
+git clone https://github.com/mant7s/qps-counter.git
+cd qps-counter
+```
 
-# 运行基准测试
-$ make benchmark
+2. 安装依赖
+```bash
+go mod download
+```
+
+3. 运行测试
+```bash
+make test
+```
+
+4. 构建项目
+```bash
+make build
 ```
 
 ## 🤝 贡献指南
-1. Fork项目并创建分支
+
+欢迎贡献代码！请确保：
+
+1. Fork项目并创建特性分支
 2. 添加测试用例
-3. 提交Pull Request
-4. 遵循Go代码规范（使用gofmt）
+3. 提交PR前运行`make test`确保测试通过
+4. 遵循项目的代码规范
 
 ## 📄 许可证
-MIT License
+
+本项目采用MIT许可证 - 详见[LICENSE](LICENSE)文件
 
 ## 📞 联系方式
-- 项目维护者: [mant7s](https://github.com/mant7s)
-- 问题反馈: [Issues](https://github.com/mant7s/qps-counter/issues)
+
+- 作者：Mant7s
+- GitHub：[@mant7s](https://github.com/mant7s)

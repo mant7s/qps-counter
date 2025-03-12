@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +9,8 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
+
+	"github.com/valyala/fasthttp"
 
 	"github.com/mant7s/qps-counter/internal/api"
 	"github.com/mant7s/qps-counter/internal/config"
@@ -59,17 +60,47 @@ func main() {
 		defer metricsCollector.Stop()
 	}
 
-	router := api.NewRouter(qpsCounter, gracefulShutdown, rateLimiter, metricsCollector, cfg.Metrics.Endpoint, cfg.Metrics.Enabled)
+	// 根据配置选择服务器类型
+	// 根据配置选择服务器类型
+	type Server interface {
+		ListenAndServe() error
+		Shutdown(ctx context.Context) error
+	}
 
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:      router,
-		ReadTimeout:  cfg.Server.ReadTimeout,
-		WriteTimeout: cfg.Server.WriteTimeout,
+	var srv Server
+
+	switch cfg.Server.ServerType {
+	case "fasthttp":
+		// 使用FastHTTP路由器
+		router := api.NewFastHTTPRouter(qpsCounter, gracefulShutdown, rateLimiter, metricsCollector, cfg.Metrics.Endpoint, cfg.Metrics.Enabled)
+		// 配置FastHTTP服务器
+		fastSrv := &fasthttp.Server{
+			Name:               fmt.Sprintf(":%d", cfg.Server.Port),
+			Handler:            router.Handler(),
+			ReadTimeout:        cfg.Server.ReadTimeout,
+			WriteTimeout:       cfg.Server.WriteTimeout,
+			MaxRequestBodySize: 1024 * 1024, // 1MB
+			GetOnly:            false,
+			DisableKeepalive:   false,
+		}
+		// 包装FastHTTP服务器以实现Server接口
+		srv = &FastHTTPServerWrapper{server: fastSrv}
+	default: // 默认使用Gin
+		// 使用Gin路由器
+		router := api.NewRouter(qpsCounter, gracefulShutdown, rateLimiter, metricsCollector, cfg.Metrics.Endpoint, cfg.Metrics.Enabled)
+		// 配置Gin服务器
+		ginServer := &http.Server{
+			Addr:           fmt.Sprintf(":%d", cfg.Server.Port),
+			Handler:        router,
+			ReadTimeout:    cfg.Server.ReadTimeout,
+			WriteTimeout:   cfg.Server.WriteTimeout,
+			MaxHeaderBytes: 1 << 20, // 1MB
+		}
+		srv = ginServer
 	}
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(http.ErrServerClosed, err) {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("Server start failed", zap.Error(err))
 		}
 	}()
@@ -88,6 +119,7 @@ func main() {
 		logger.Error("Graceful shutdown error", zap.Error(err))
 	}
 
+	// 关闭服务器
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Error("Server shutdown error", zap.Error(err))
 	}
