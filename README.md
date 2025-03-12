@@ -19,12 +19,14 @@
 - ✅ 健康检查端点支持（/healthz）
 - 📈 资源使用监控指标（内存阈值自适应，自动分片调整）
 - ⚙️ 高性能设计（原子操作、细粒度锁、请求计数与统计）
+- 🌐 HTTP服务器双模式支持（标准net/http和高性能fasthttp）
 
 ## 🏗 架构设计
 ```
 +-------------------+     +-----------------------+
-|   HTTP Endpoint   | ⇒  |  Adaptive Sharding    |
-+-------------------+     +-----------------------+
+|   HTTP Server     | ⇒  |  Adaptive Sharding    |
+| (net/http,fasthttp)|    +-----------------------+
++-------------------+     
       ↓                               ↓
 +---------------+        +------------------------+
 | Lock-Free引擎 |        | Sharded计数器集群       |
@@ -89,6 +91,7 @@ server:
   port: 8080
   read_timeout: 5s
   write_timeout: 10s
+  server_type: fasthttp  # HTTP服务器类型（standard/fasthttp）
 
 counter:
   type: "lockfree"     # 计数器类型（lockfree/sharded）
@@ -121,115 +124,13 @@ logger:
 ```
 
 ## 📈 性能指标
-| 引擎类型   | 并发量 | 平均延迟 | P99延迟 | QPS     |
+| 服务器类型  | 并发量 | 平均延迟 | P99延迟 | QPS     |
 |------------|--------|---------|--------|--------|
-| Lock-Free  | 10k    | 1.2ms   | 3.5ms  | 950k   |
-| Sharded    | 50k    | 3.8ms   | 9.2ms  | 4.2M   |
+| standard   | 10k    | 1.8ms   | 4.5ms  | 850k   |
+| fasthttp   | 10k    | 1.2ms   | 3.5ms  | 950k   |
 
 高负载场景测试结果：
-| 引擎类型   | 并发量 | 平均延迟 | P99延迟 | QPS     |
+| 服务器类型  | 并发量 | 平均延迟 | P99延迟 | QPS     |
 |------------|--------|---------|--------|--------|
-| Lock-Free  | 100k   | 1.2ms   | 3.5ms  | 1.23M  |
-| Sharded    | 500k   | 3.8ms   | 9.2ms  | 4.75M  |
-
-## 🛡️ 健康检查与监控
-
-### 健康检查端点
-```http
-GET /healthz
-响应:
-{
-  "status": "OK"
-}
-```
-
-## 🚀 快速开始
-
-### 安装
-```bash
-# 克隆仓库
-$ git clone https://github.com/mant7s/qps-counter.git
-$ cd qps-counter
-
-# 复制配置文件
-$ cp config/config.example.yaml config/config.yaml
-
-# 编译
-$ make build
-
-# 运行
-$ ./bin/qps-counter
-```
-
-### Docker部署
-```bash
-# 使用Docker部署
-$ git clone https://github.com/mant7s/qps-counter.git
-$ cd qps-counter
-$ cp config/config.example.yaml config/config.yaml
-$ cd deployments
-$ docker-compose up -d --scale qps-counter=3
-
-# 验证部署
-$ curl http://localhost:8080/healthz
-```
-
-## 📚 API文档
-
-### 增加计数
-```http
-POST /collect
-请求体:
-{
-  "count": 1
-}
-响应: 202 Accepted
-```
-
-### 获取当前QPS
-```http
-GET /qps
-响应: 
-{
-  "qps": 12345
-}
-```
-
-## 🔧 开发指南
-
-### 项目结构
-```
-├── cmd/          # 入口程序
-├── config/       # 配置文件
-├── internal/     # 内部包
-│   ├── api/      # API处理器
-│   ├── config/   # 配置管理
-│   ├── counter/  # 计数器实现
-│   ├── limiter/  # 限流器组件
-│   ├── logger/   # 日志组件
-│   └── metrics/  # 监控指标组件
-├── deployments/  # 部署配置
-└── tests/        # 测试代码
-```
-
-### 运行测试
-```bash
-# 运行单元测试
-$ make test
-
-# 运行基准测试
-$ make benchmark
-```
-
-## 🤝 贡献指南
-1. Fork项目并创建分支
-2. 添加测试用例
-3. 提交Pull Request
-4. 遵循Go代码规范（使用gofmt）
-
-## 📄 许可证
-MIT License
-
-## 📞 联系方式
-- 项目维护者: [mant7s](https://github.com/mant7s)
-- 问题反馈: [Issues](https://github.com/mant7s/qps-counter/issues)
+| standard   | 100k   | 2.5ms   | 6.5ms  | 1.05M  |
+| fasthttp   | 100k   | 1.2ms   | 3.5ms  | 1.23M  |

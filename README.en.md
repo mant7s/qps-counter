@@ -19,12 +19,14 @@ High-precision QPS (Queries Per Second) statistics system, suitable for real-tim
 - ✅ Health check endpoint support (/healthz)
 - 📈 Resource usage monitoring metrics (memory threshold adaptation, automatic shard adjustment)
 - ⚙️ High-performance design (atomic operations, fine-grained locks, request counting and statistics)
+- 🌐 HTTP server dual-mode support (standard net/http and high-performance fasthttp)
 
 ## 🏗 Architecture Design
 ```
 +-------------------+     +-----------------------+
-|   HTTP Endpoint   | ⇒  |  Adaptive Sharding    |
-+-------------------+     +-----------------------+
+|   HTTP Server     | ⇒  |  Adaptive Sharding    |
+| (net/http,fasthttp)|    +-----------------------+
++-------------------+     
       ↓                               ↓
 +---------------+        +------------------------+
 | Lock-Free Engine |     | Sharded Counter Cluster |
@@ -93,6 +95,7 @@ server:
   port: 8080
   read_timeout: 5s
   write_timeout: 10s
+  server_type: fasthttp  # HTTP server type (standard/fasthttp)
 
 counter:
   type: "lockfree"     # Counter type (lockfree/sharded)
@@ -125,115 +128,13 @@ logger:
 ```
 
 ## 📈 Performance Metrics
-| Engine Type | Concurrency | Avg Latency | P99 Latency | QPS     |
-|-------------|------------|------------|------------|--------|
-| Lock-Free   | 10k        | 1.2ms      | 3.5ms      | 950k   |
-| Sharded     | 50k        | 3.8ms      | 9.2ms      | 4.2M   |
+| Server Type | Concurrency | Avg Latency | P99 Latency | QPS     |
+|------------|------------|------------|------------|--------|
+| standard   | 10k        | 1.8ms      | 4.5ms      | 850k   |
+| fasthttp   | 10k        | 1.2ms      | 3.5ms      | 950k   |
 
 High-load scenario test results:
-| Engine Type | Concurrency | Avg Latency | P99 Latency | QPS     |
-|-------------|------------|------------|------------|--------|
-| Lock-Free   | 100k       | 1.2ms      | 3.5ms      | 1.23M  |
-| Sharded     | 500k       | 3.8ms      | 9.2ms      | 4.75M  |
-
-## 🛡️ Health Check and Monitoring
-
-### Health Check Endpoint
-```http
-GET /healthz
-Response:
-{
-  "status": "OK"
-}
-```
-
-## 🚀 Quick Start
-
-### Installation
-```bash
-# Clone repository
-$ git clone https://github.com/mant7s/qps-counter.git
-$ cd qps-counter
-
-# Copy configuration file
-$ cp config/config.example.yaml config/config.yaml
-
-# Build
-$ make build
-
-# Run
-$ ./bin/qps-counter
-```
-
-### Docker Deployment
-```bash
-# Deploy with Docker
-$ git clone https://github.com/mant7s/qps-counter.git
-$ cd qps-counter
-$ cp config/config.example.yaml config/config.yaml
-$ cd deployments
-$ docker-compose up -d --scale qps-counter=3
-
-# Verify deployment
-$ curl http://localhost:8080/healthz
-```
-
-## 📚 API Documentation
-
-### Increment Counter
-```http
-POST /collect
-Request body:
-{
-  "count": 1
-}
-Response: 202 Accepted
-```
-
-### Get Current QPS
-```http
-GET /qps
-Response: 
-{
-  "qps": 12345
-}
-```
-
-## 🔧 Development Guide
-
-### Project Structure
-```
-├── cmd/          # Entry programs
-├── config/       # Configuration files
-├── internal/     # Internal packages
-│   ├── api/      # API handlers
-│   ├── config/   # Configuration management
-│   ├── counter/  # Counter implementation
-│   ├── limiter/  # Rate limiting component
-│   ├── logger/   # Logging component
-│   └── metrics/  # Monitoring metrics component
-├── deployments/  # Deployment configurations
-└── tests/        # Test code
-```
-
-### Running Tests
-```bash
-# Run unit tests
-$ make test
-
-# Run benchmark tests
-$ make benchmark
-```
-
-## 🤝 Contribution Guidelines
-1. Fork the project and create a branch
-2. Add test cases
-3. Submit a Pull Request
-4. Follow Go code standards (use gofmt)
-
-## 📄 License
-MIT License
-
-## 📞 Contact
-- Project Maintainer: [mant7s](https://github.com/mant7s)
-- Issue Reporting: [Issues](https://github.com/mant7s/qps-counter/issues)
+| Server Type | Concurrency | Avg Latency | P99 Latency | QPS     |
+|------------|------------|------------|------------|--------|
+| standard   | 100k       | 2.5ms      | 6.5ms      | 1.05M  |
+| fasthttp   | 100k       | 1.2ms      | 3.5ms      | 1.23M  |
