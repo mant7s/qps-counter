@@ -138,3 +138,97 @@ High-load scenario test results:
 |------------|------------|------------|------------|--------|
 | standard   | 100k       | 2.5ms      | 6.5ms      | 1.05M  |
 | fasthttp   | 100k       | 1.2ms      | 3.5ms      | 1.23M  |
+
+## 🚀 Quick Start
+
+### Installation
+```bash
+go get github.com/mant7s/qps-counter
+```
+
+### Basic Usage
+```go
+package main
+
+import (
+    "github.com/mant7s/qps-counter/counter"
+    "log"
+)
+
+func main() {
+    // Create counter instance
+    cfg := counter.DefaultConfig()
+    counter, err := counter.NewCounter(cfg)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Increment counter
+    counter.Increment()
+
+    // Get current QPS
+    qps := counter.GetQPS()
+    log.Printf("Current QPS: %d", qps)
+}
+```
+
+## 📊 Monitoring Metrics
+
+The system exposes Prometheus-format monitoring metrics through the `/metrics` endpoint:
+
+- `qps_counter_requests_total`: Total request count
+- `qps_counter_current_qps`: Current QPS value
+- `qps_counter_memory_usage_bytes`: Memory usage
+- `qps_counter_cpu_usage_percent`: CPU usage
+- `qps_counter_goroutines`: Goroutine count
+- `qps_counter_request_duration_seconds`: Request processing time distribution
+
+## 🔍 API Documentation
+
+For detailed API documentation, please refer to [API Documentation](docs/api.md).
+
+## 🛠 Development Guide
+
+### Requirements
+- Go 1.18+
+- Make
+
+### Local Development
+1. Clone repository
+```bash
+git clone https://github.com/mant7s/qps-counter.git
+cd qps-counter
+```
+
+2. Install dependencies
+```bash
+go mod download
+```
+
+3. Run tests
+```bash
+make test
+```
+
+4. Build project
+```bash
+make build
+```
+
+## 🤝 Contributing Guide
+
+Contributions are welcome! Please ensure:
+
+1. Fork the project and create a feature branch
+2. Add test cases
+3. Run `make test` before submitting PR to ensure tests pass
+4. Follow the project's code standards
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+
+## 📞 Contact
+
+- Author: Mant7s
+- GitHub: [@mant7s](https://github.com/mant7s)

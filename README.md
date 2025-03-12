@@ -134,3 +134,97 @@ logger:
 |------------|--------|---------|--------|--------|
 | standard   | 100k   | 2.5ms   | 6.5ms  | 1.05M  |
 | fasthttp   | 100k   | 1.2ms   | 3.5ms  | 1.23M  |
+
+## 🚀 快速开始
+
+### 安装
+```bash
+go get github.com/mant7s/qps-counter
+```
+
+### 基本使用
+```go
+package main
+
+import (
+    "github.com/mant7s/qps-counter/counter"
+    "log"
+)
+
+func main() {
+    // 创建计数器实例
+    cfg := counter.DefaultConfig()
+    counter, err := counter.NewCounter(cfg)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // 增加计数
+    counter.Increment()
+
+    // 获取当前QPS
+    qps := counter.GetQPS()
+    log.Printf("Current QPS: %d", qps)
+}
+```
+
+## 📊 监控指标
+
+系统通过`/metrics`端点暴露Prometheus格式的监控指标：
+
+- `qps_counter_requests_total`: 总请求计数
+- `qps_counter_current_qps`: 当前QPS值
+- `qps_counter_memory_usage_bytes`: 内存使用量
+- `qps_counter_cpu_usage_percent`: CPU使用率
+- `qps_counter_goroutines`: Goroutine数量
+- `qps_counter_request_duration_seconds`: 请求处理时间分布
+
+## 🔍 API文档
+
+详细的API文档请参考[API文档](docs/api.md)。
+
+## 🛠 开发指南
+
+### 环境要求
+- Go 1.18+
+- Make
+
+### 本地开发
+1. 克隆仓库
+```bash
+git clone https://github.com/mant7s/qps-counter.git
+cd qps-counter
+```
+
+2. 安装依赖
+```bash
+go mod download
+```
+
+3. 运行测试
+```bash
+make test
+```
+
+4. 构建项目
+```bash
+make build
+```
+
+## 🤝 贡献指南
+
+欢迎贡献代码！请确保：
+
+1. Fork项目并创建特性分支
+2. 添加测试用例
+3. 提交PR前运行`make test`确保测试通过
+4. 遵循项目的代码规范
+
+## 📄 许可证
+
+本项目采用MIT许可证 - 详见[LICENSE](LICENSE)文件
+
+## 📞 联系方式
+
+- 作者：Mant7s
+- GitHub：[@mant7s](https://github.com/mant7s)
