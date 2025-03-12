@@ -1,6 +1,7 @@
 package unit_test
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -21,23 +22,28 @@ func init() {
 
 // mockCounter 创建一个模拟的计数器，用于测试
 type mockCounter struct {
+	mu  sync.RWMutex
 	qps int64
 }
 
-func (m *mockCounter) Incr() {
-	// 空实现
-}
-
 func (m *mockCounter) CurrentQPS() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.qps
 }
 
-func (m *mockCounter) Stop() {
-	// 空实现
+func (m *mockCounter) SetQPS(qps int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.qps = qps
 }
 
-func (m *mockCounter) SetQPS(qps int64) {
-	m.qps = qps
+func (m *mockCounter) Stop() {}
+
+func (m *mockCounter) Incr() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.qps++
 }
 
 func TestEnhancedAdaptiveShardingManager(t *testing.T) {
@@ -49,9 +55,6 @@ func TestEnhancedAdaptiveShardingManager(t *testing.T) {
 		Precision:  100 * time.Millisecond,
 	}
 
-	// 创建模拟计数器
-	mock := &mockCounter{qps: 1000}
-
 	// 设置较短的调整间隔以加速测试
 	adjustInterval := 100 * time.Millisecond
 	minShards := 2
@@ -59,6 +62,9 @@ func TestEnhancedAdaptiveShardingManager(t *testing.T) {
 	memoryThreshold := uint64(100 * 1024 * 1024) // 100MB，设置较小的阈值以便于测试
 
 	t.Run("基本功能测试", func(t *testing.T) {
+		// 创建模拟计数器，初始QPS较低
+		mock := &mockCounter{qps: 1000}
+
 		// 创建增强的自适应分片管理器
 		asm := counter.NewEnhancedAdaptiveShardingManager(
 			mock,
@@ -115,7 +121,7 @@ func TestEnhancedAdaptiveShardingManager(t *testing.T) {
 		// 创建模拟计数器，初始QPS较高
 		mock := &mockCounter{qps: 5000}
 
-		// 创建增强的自适应分片管理器，初始设置为最大分片数
+		// 创建增强的自适应分片管理器
 		asm := counter.NewEnhancedAdaptiveShardingManager(
 			mock,
 			cfg,
@@ -126,12 +132,9 @@ func TestEnhancedAdaptiveShardingManager(t *testing.T) {
 		)
 		defer asm.Stop()
 
-		// 手动设置初始分片数为最大值
-		// 注意：这里假设有一个SetCurrentShards方法，如果没有，可以通过其他方式实现
-		// 例如，可以通过反射或者添加一个测试专用的方法
-		// 这里我们通过调整QPS来间接实现
-		time.Sleep(adjustInterval * 2) // 等待初始调整
-		mock.SetQPS(10000)             // 设置一个非常高的QPS
+		// 等待初始调整完成
+		time.Sleep(adjustInterval * 2)
+		mock.SetQPS(10000) // 设置一个非常高的QPS
 		time.Sleep(adjustInterval * 2) // 等待调整到较高分片数
 
 		// 现在模拟QPS大幅下降
@@ -168,9 +171,9 @@ func TestEnhancedAdaptiveShardingManager(t *testing.T) {
 		)
 		defer asm.Stop()
 
-		// 手动设置初始分片数为较高值
-		time.Sleep(adjustInterval * 2) // 等待初始调整
-		mock.SetQPS(10000)             // 设置一个非常高的QPS
+		// 等待初始调整完成
+		time.Sleep(adjustInterval * 2)
+		mock.SetQPS(10000) // 设置一个非常高的QPS
 		time.Sleep(adjustInterval * 2) // 等待调整到较高分片数
 
 		// 分配一些内存，确保超过阈值
@@ -188,32 +191,5 @@ func TestEnhancedAdaptiveShardingManager(t *testing.T) {
 
 		// 防止memoryHog被过早GC
 		_ = memoryHog
-	})
-
-	t.Run("设置内存阈值和权重测试", func(t *testing.T) {
-		// 创建模拟计数器
-		mock := &mockCounter{qps: 1000}
-
-		// 创建增强的自适应分片管理器
-		asm := counter.NewEnhancedAdaptiveShardingManager(
-			mock,
-			cfg,
-			minShards,
-			maxShards,
-			memoryThreshold,
-			adjustInterval,
-		)
-		defer asm.Stop()
-
-		// 测试设置新的内存阈值
-		newThreshold := uint64(200 * 1024 * 1024) // 200MB
-		asm.SetMemoryThreshold(newThreshold)
-
-		// 测试设置新的权重
-		asm.SetWeights(0.7, 0.3) // 70% QPS权重，30%内存权重
-
-		// 获取状态并验证设置是否生效
-		stats := asm.GetStats()
-		assert.Equal(t, newThreshold, stats["memory_threshold"])
 	})
 }

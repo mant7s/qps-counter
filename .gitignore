@@ -6,3 +6,4 @@
 # Build
 bin
 config/config.yaml
+coverage.out

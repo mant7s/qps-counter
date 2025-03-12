@@ -18,7 +18,8 @@ type ShardedWindow struct {
 
 type shard struct {
 	slots     []*slot
-	slotMutex []sync.Mutex
+	slotMutex []sync.RWMutex // 使用 RWMutex 替代 Mutex
+	shardLock sync.RWMutex   // 添加一个用于保护整个 slots 数组的锁
 }
 
 type slot struct {
@@ -39,7 +40,7 @@ func NewSharded(cfg *config.CounterConfig) Counter {
 	for i := range sw.shards {
 		sw.shards[i] = &shard{
 			slots:     make([]*slot, slotNum),
-			slotMutex: make([]sync.Mutex, slotNum),
+			slotMutex: make([]sync.RWMutex, slotNum),
 		}
 		for j := range sw.shards[i].slots {
 			sw.shards[i].slots[j] = &slot{}
@@ -61,6 +62,9 @@ func (sw *ShardedWindow) Incr() {
 	slotID := (now / precisionNano) % int64(sw.config.SlotNum)
 
 	s := sw.shards[shardID]
+	s.shardLock.RLock()
+	defer s.shardLock.RUnlock()
+
 	s.slotMutex[slotID].Lock()
 	defer s.slotMutex[slotID].Unlock()
 
@@ -77,23 +81,24 @@ func (sw *ShardedWindow) Incr() {
 }
 
 func (sw *ShardedWindow) CurrentQPS() int64 {
-	// 计算窗口内的实际QPS，而不是简单返回累计值
 	now := time.Now().UnixNano()
 	windowStart := now - int64(sw.config.WindowSize)
-	
+
 	var total int64
 	for shardID := range sw.shards {
 		shard := sw.shards[shardID]
+		shard.shardLock.RLock()
 		for slotID := range shard.slots {
-			// 使用读锁以避免阻塞写操作
-			shard.slotMutex[slotID].Lock()
+			// 使用读锁来允许并发读取
+			shard.slotMutex[slotID].RLock()
 			if shard.slots[slotID].timestamp >= windowStart {
 				total += shard.slots[slotID].count
 			}
-			shard.slotMutex[slotID].Unlock()
+			shard.slotMutex[slotID].RUnlock()
 		}
+		shard.shardLock.RUnlock()
 	}
-	
+
 	// 计算每秒的请求数
 	return total * int64(time.Second) / int64(sw.config.WindowSize)
 }
@@ -127,10 +132,11 @@ func (sw *ShardedWindow) cleanupExpired() {
 		shard := sw.shards[shardID]
 		// 创建新的槽位数组以避免内存泄漏
 		newSlots := make([]*slot, len(shard.slots))
-		
+
+		shard.shardLock.Lock()
 		for slotID := range shard.slots {
 			shard.slotMutex[slotID].Lock()
-			
+
 			if shard.slots[slotID].timestamp >= windowStart {
 				// 只保留未过期的数据
 				newSlots[slotID] = &slot{
@@ -143,14 +149,15 @@ func (sw *ShardedWindow) cleanupExpired() {
 				// 为过期槽位创建新的空对象
 				newSlots[slotID] = &slot{}
 			}
-			
+
 			shard.slotMutex[slotID].Unlock()
 		}
-		
+
 		// 替换整个槽位数组
 		shard.slots = newSlots
+		shard.shardLock.Unlock()
 	}
-	
+
 	// 更新总计数
 	sw.totalCount.Store(newTotal)
 }
