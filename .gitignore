@@ -7,3 +7,4 @@
 bin
 config/config.yaml
 coverage.out
+coverage.html
