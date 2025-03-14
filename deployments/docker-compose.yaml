@@ -1,9 +1,9 @@
-version: '3.8'
-
 services:
   qps-counter:
     image: qps-counter:latest
-    build: .
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
     ports:
       - "8080:8080"
     volumes:

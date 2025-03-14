@@ -4,24 +4,24 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/mant7s/qps-counter)](https://github.com/mant7s/qps-counter)
 
-高精度QPS统计系统，适用于高并发场景的实时请求频率统计。基于Go语言实现的高性能计数器，支持百万级QPS场景下的精确统计。
+High-precision QPS (Queries Per Second) statistics system, suitable for real-time request frequency statistics in high-concurrency scenarios. A high-performance counter implemented in Go language, supporting accurate statistics in million-level QPS scenarios.
 
-*[中文](README.md) | [English](README.en.md)*
+*[中文](README.zh_CN.md)*
 
-## ✨ 核心特性
-- 🚀 双引擎架构（Lock-Free/Sharded），支持百万级QPS实时统计
-- 🔄 智能分片策略（基于CPU核心数的动态分片，10秒间隔QPS监控）
-- ⚡ 时间窗口滑动算法（1s窗口，100ms精度）
-- 🧠 自适应负载均衡（QPS变化率超30%自动调整）
-- 🛡️ 增强的优雅关闭机制（请求完整性保障，超时控制，强制关闭）
-- 🔒 令牌桶限流保护（可动态调整速率，支持突发流量，自适应限流）
-- 📊 Prometheus监控集成（QPS、内存、CPU、请求延迟等指标）
-- ✅ 健康检查端点支持（/healthz）
-- 📈 资源使用监控指标（内存阈值自适应，自动分片调整）
-- ⚙️ 高性能设计（原子操作、细粒度锁、请求计数与统计）
-- 🌐 HTTP服务器双模式支持（标准net/http和高性能fasthttp）
+## ✨ Core Features
+- 🚀 Dual-engine architecture (Lock-Free/Sharded), supporting million-level QPS real-time statistics
+- 🔄 Intelligent sharding strategy (dynamic sharding based on CPU cores, 10-second interval QPS monitoring)
+- ⚡ Time window sliding algorithm (1s window, 100ms precision)
+- 🧠 Adaptive load balancing (automatically adjusts when QPS change rate exceeds 30%)
+- 🛡️ Enhanced graceful shutdown mechanism (request integrity guarantee, timeout control, forced shutdown)
+- 🔒 Token bucket rate limiting (dynamically adjustable rate, burst traffic support, adaptive rate limiting)
+- 📊 Prometheus monitoring integration (QPS, memory, CPU, request latency metrics)
+- ✅ Health check endpoint support (/healthz)
+- 📈 Resource usage monitoring metrics (memory threshold adaptation, automatic shard adjustment)
+- ⚙️ High-performance design (atomic operations, fine-grained locks, request counting and statistics)
+- 🌐 HTTP server dual-mode support (standard net/http and high-performance fasthttp)
 
-## 🏗 架构设计
+## 🏗 Architecture Design
 ```
 +-------------------+     +-----------------------+
 |   HTTP Server     | ⇒  |  Adaptive Sharding    |
@@ -29,90 +29,94 @@
 +-------------------+     
       ↓                               ↓
 +---------------+        +------------------------+
-| Lock-Free引擎 |        | Sharded计数器集群       |
-| (CAS原子操作)  |        | (动态分片)              |
+| Lock-Free Engine |     | Sharded Counter Cluster |
+| (CAS Atomic Ops) |     | (Dynamic Sharding)     |
 +---------------+        +------------------------+
                                 ⇓
 +------------------------------------------------+
-|           动态分片管理器                       |
-|  • 10秒间隔监控QPS变化率（±30%触发调整）        |
-|  • 分片数自动伸缩（最小CPU核心数，最大CPU核心数*8）|
-|  • 内存使用监控（自动调整分片以优化内存使用）     |
+|           Dynamic Sharding Manager             |
+|  • 10s interval monitoring QPS change rate     |
+|    (±30% triggers adjustment)                  |
+|  • Auto-scaling shards (min: CPU cores,        |
+|    max: CPU cores*8)                           |
+|  • Memory usage monitoring (auto-adjusts shards |
+|    to optimize memory usage)                   |
 +------------------------------------------------+
                                 ⇓
 +------------------+  +------------------+  +------------------+
-|    限流保护层    |  |    监控指标层    |  |   优雅关闭机制   |
-| (令牌桶+自适应)  |  | (Prometheus集成) |  | (请求完整性保障) |
+|  Rate Limiting   |  |    Monitoring    |  | Graceful Shutdown|
+| (Token Bucket+  |  | (Prometheus      |  | (Request Integrity|
+|  Adaptive)      |  |  Integration)    |  |  Guarantee)      |
 +------------------+  +------------------+  +------------------+
 ```
 
-## 🔍 技术实现
+## 🔍 Technical Implementation
 
-### Lock-Free引擎
-基于原子操作（CAS）实现的无锁计数器，适用于中等流量场景：
-- 使用`atomic.Int64`实现无锁计数，避免高并发下的锁竞争
-- 时间窗口滑动算法，保证统计精度和实时性
-- 自动清理过期数据，避免内存泄漏
+### Lock-Free Engine
+Lock-free counter based on atomic operations (CAS), suitable for medium traffic scenarios:
+- Uses `atomic.Int64` to implement lock-free counting, avoiding lock contention in high concurrency
+- Time window sliding algorithm, ensuring statistical accuracy and real-time performance
+- Automatic cleaning of expired data to prevent memory leaks
 
-### Sharded计数器
-分片设计的高性能计数器，适用于超高并发场景：
-- 基于CPU核心数的自动分片，默认为`runtime.NumCPU() * 4`
-- 细粒度锁设计，每个时间槽独立锁，最大化并行性
-- 哈希算法确保请求均匀分布到各分片
+### Sharded Counter
+High-performance counter with sharding design, suitable for ultra-high concurrency scenarios:
+- Automatic sharding based on CPU cores, default is `runtime.NumCPU() * 4`
+- Fine-grained lock design, independent lock for each time slot, maximizing parallelism
+- Hash algorithm ensures requests are evenly distributed across shards
 
-### 自适应分片管理
-- 实时监控QPS变化率，当变化超过±30%时触发分片调整
-- 增长时增加50%分片数，下降时减少30%分片数
-- 分片数范围控制在CPU核心数到CPU核心数*8之间，避免资源浪费
-- 内存使用监控，当接近阈值时自动调整分片数量
-- 综合考量QPS变化率(60%)和内存使用情况(40%)进行智能调整
+### Adaptive Sharding Management
+- Real-time monitoring of QPS change rate, triggering shard adjustment when changes exceed ±30%
+- Increases shard count by 50% during growth, reduces by 30% during decline
+- Shard count range controlled between CPU cores and CPU cores*8, avoiding resource waste
+- Memory usage monitoring, automatically adjusts shards when approaching threshold
+- Intelligent adjustment based on combined QPS change rate (60%) and memory usage (40%)
 
-### 令牌桶限流器
-- 基于令牌桶算法实现高效限流，支持突发流量处理
-- 动态调整限流速率，适应系统负载变化
-- 自适应限流模式，根据系统资源使用情况自动调整限流参数
-- 精确统计被拒绝请求，提供限流指标监控
+### Token Bucket Rate Limiter
+- Efficient rate limiting based on token bucket algorithm, supporting burst traffic
+- Dynamic rate adjustment to adapt to system load changes
+- Adaptive rate limiting mode that automatically adjusts parameters based on system resource usage
+- Precise tracking of rejected requests with monitoring metrics
 
-### 监控指标系统
-- 集成Prometheus，提供丰富的系统运行指标
-- 实时监控QPS、内存使用、CPU使用率、Goroutine数量
-- 请求延迟分布统计，支持P99等性能分析
-- 可配置的指标收集间隔，优化性能与精度平衡
+### Monitoring Metrics System
+- Prometheus integration providing rich system operational metrics
+- Real-time monitoring of QPS, memory usage, CPU utilization, and Goroutine count
+- Request latency distribution statistics supporting P99 performance analysis
+- Configurable metrics collection interval optimizing performance and precision balance
 
-### 增强的优雅关闭机制
-- 请求完整性保障，确保进行中的请求能够完成处理
-- 多级超时控制，包括软超时和硬超时机制
-- 实时状态报告，提供关闭过程的可观测性
-- 强制关闭保护，防止系统长时间无法退出
+### Enhanced Graceful Shutdown
+- Request integrity guarantee ensuring in-progress requests complete processing
+- Multi-level timeout control with soft and hard timeout mechanisms
+- Real-time status reporting providing shutdown process observability
+- Forced shutdown protection preventing system from hanging indefinitely
 
-## ⚙️ 配置说明
+## ⚙️ Configuration
 ```yaml
 server:
   port: 8080
   read_timeout: 5s
   write_timeout: 10s
-  server_type: fasthttp  # HTTP服务器类型（standard/fasthttp）
+  server_type: fasthttp  # HTTP server type (standard/fasthttp)
 
 counter:
-  type: "lockfree"     # 计数器类型（lockfree/sharded）
-  window_size: 1s      # 统计时间窗口
-  slot_num: 10         # 窗口分片数量
-  precision: 100ms     # 统计精度
+  type: "lockfree"     # Counter type (lockfree/sharded)
+  window_size: 1s      # Statistical time window
+  slot_num: 10         # Window shard count
+  precision: 100ms     # Statistical precision
 
 limiter:
-  enabled: true        # 是否启用限流
-  rate: 1000000        # 每秒允许的请求数
-  burst: 10000         # 突发请求容量
-  adaptive: true       # 是否启用自适应限流
+  enabled: true        # Enable rate limiting
+  rate: 1000000        # Requests allowed per second
+  burst: 10000         # Burst capacity
+  adaptive: true       # Enable adaptive rate limiting
 
 metrics:
-  enabled: true        # 是否启用指标收集
-  interval: 5s         # 指标收集间隔
-  endpoint: "/metrics" # 指标暴露端点
+  enabled: true        # Enable metrics collection
+  interval: 5s         # Metrics collection interval
+  endpoint: "/metrics" # Metrics exposure endpoint
 
 shutdown:
-  timeout: 30s         # 优雅关闭超时时间
-  max_wait: 60s        # 最大等待时间
+  timeout: 30s         # Graceful shutdown timeout
+  max_wait: 60s        # Maximum wait time
 
 logger:
   level: info
@@ -123,26 +127,26 @@ logger:
   max_age: 7
 ```
 
-## 📈 性能指标
-| 服务器类型  | 并发量 | 平均延迟 | P99延迟 | QPS     |
-|------------|--------|---------|--------|--------|
-| standard   | 10k    | 1.8ms   | 4.5ms  | 850k   |
-| fasthttp   | 10k    | 1.2ms   | 3.5ms  | 950k   |
+## 📈 Performance Metrics
+| Server Type | Concurrency | Avg Latency | P99 Latency | QPS     |
+|------------|------------|------------|------------|--------|
+| standard   | 10k        | 1.8ms      | 4.5ms      | 850k   |
+| fasthttp   | 10k        | 1.2ms      | 3.5ms      | 950k   |
 
-高负载场景测试结果：
-| 服务器类型  | 并发量 | 平均延迟 | P99延迟 | QPS     |
-|------------|--------|---------|--------|--------|
-| standard   | 100k   | 2.5ms   | 6.5ms  | 1.05M  |
-| fasthttp   | 100k   | 1.2ms   | 3.5ms  | 1.23M  |
+High-load scenario test results:
+| Server Type | Concurrency | Avg Latency | P99 Latency | QPS     |
+|------------|------------|------------|------------|--------|
+| standard   | 100k       | 2.5ms      | 6.5ms      | 1.05M  |
+| fasthttp   | 100k       | 1.2ms      | 3.5ms      | 1.23M  |
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 安装
+### Installation
 ```bash
 go get github.com/mant7s/qps-counter
 ```
 
-### 基本使用
+### Basic Usage
 ```go
 package main
 
@@ -152,79 +156,79 @@ import (
 )
 
 func main() {
-    // 创建计数器实例
+    // Create counter instance
     cfg := counter.DefaultConfig()
     counter, err := counter.NewCounter(cfg)
     if err != nil {
         log.Fatal(err)
     }
 
-    // 增加计数
+    // Increment counter
     counter.Increment()
 
-    // 获取当前QPS
+    // Get current QPS
     qps := counter.GetQPS()
     log.Printf("Current QPS: %d", qps)
 }
 ```
 
-## 📊 监控指标
+## 📊 Monitoring Metrics
 
-系统通过`/metrics`端点暴露Prometheus格式的监控指标：
+The system exposes Prometheus-format monitoring metrics through the `/metrics` endpoint:
 
-- `qps_counter_requests_total`: 总请求计数
-- `qps_counter_current_qps`: 当前QPS值
-- `qps_counter_memory_usage_bytes`: 内存使用量
-- `qps_counter_cpu_usage_percent`: CPU使用率
-- `qps_counter_goroutines`: Goroutine数量
-- `qps_counter_request_duration_seconds`: 请求处理时间分布
+- `qps_counter_requests_total`: Total request count
+- `qps_counter_current_qps`: Current QPS value
+- `qps_counter_memory_usage_bytes`: Memory usage
+- `qps_counter_cpu_usage_percent`: CPU usage
+- `qps_counter_goroutines`: Goroutine count
+- `qps_counter_request_duration_seconds`: Request processing time distribution
 
-## 🔍 API文档
+## 🔍 API Documentation
 
-详细的API文档请参考[API文档](docs/api.md)。
+For detailed API documentation, please refer to [API Documentation](docs/api.md).
 
-## 🛠 开发指南
+## 🛠 Development Guide
 
-### 环境要求
+### Requirements
 - Go 1.18+
 - Make
 
-### 本地开发
-1. 克隆仓库
+### Local Development
+1. Clone repository
 ```bash
 git clone https://github.com/mant7s/qps-counter.git
 cd qps-counter
 ```
 
-2. 安装依赖
+2. Install dependencies
 ```bash
 go mod download
 ```
 
-3. 运行测试
+3. Run tests
 ```bash
 make test
 ```
 
-4. 构建项目
+4. Build project
 ```bash
 make build
 ```
 
-## 🤝 贡献指南
+## 🤝 Contributing Guide
 
-欢迎贡献代码！请确保：
+Contributions are welcome! Please ensure:
 
-1. Fork项目并创建特性分支
-2. 添加测试用例
-3. 提交PR前运行`make test`确保测试通过
-4. 遵循项目的代码规范
+1. Fork the project and create a feature branch
+2. Add test cases
+3. Run `make test` before submitting PR to ensure tests pass
+4. Follow the project's code standards
 
-## 📄 许可证
+## 📄 License
 
-本项目采用MIT许可证 - 详见[LICENSE](LICENSE)文件
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
 
-## 📞 联系方式
+## 📞 Contact
 
-- 作者：Mant7s
-- GitHub：[@mant7s](https://github.com/mant7s)
+- Author: Mant7s
+- GitHub: [@mant7s](https://github.com/mant7s)
