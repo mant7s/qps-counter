@@ -5,9 +5,9 @@ services:
       context: ..
       dockerfile: deployments/Dockerfile
     ports:
-      - "8080:8080"
+      - "8080-8082:8080"
     volumes:
-      - ./logs:/var/log/qps-counter:rw
+      - ${PWD}/logs:/var/log/qps-counter:rw
     environment:
       - QPS_SERVER_PORT=8080
       - QPS_LOGGER_LEVEL=info
